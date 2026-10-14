@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BKSMM - Reset password</title>
+<style>
+  :root{--bg:#0b1220;--card:#111a2e;--line:#1f2b46;--txt:#e5e7eb;--mut:#94a3b8;--acc:#05a6f3}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:grid;place-items:center;padding:16px;background:radial-gradient(circle at 30% 0%,#12305a,var(--bg) 60%);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+  .card{width:100%;max-width:400px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:28px}
+  h1{margin:0 0 4px;font-size:26px;letter-spacing:.5px}
+  .sub{color:var(--mut);font-size:14px;margin-bottom:20px}
+  .tabs{display:flex;background:#0b1426;border-radius:10px;padding:4px;margin-bottom:18px}
+  .tabs button{flex:1;border:0;background:none;color:var(--mut);padding:10px;border-radius:8px;font-size:15px;cursor:pointer}
+  .tabs button.on{background:var(--acc);color:#fff}
+  label{display:block;font-size:13px;color:var(--mut);margin:12px 0 5px}
+  input{width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);background:#0b1426;color:var(--txt);font-size:15px}
+  input:focus{outline:2px solid var(--acc);border-color:transparent}
+  .go{width:100%;margin-top:18px;padding:13px;border:0;border-radius:10px;background:var(--acc);color:#fff;font-size:16px;font-weight:600;cursor:pointer}
+  .go:disabled{opacity:.6}
+  .err{color:#fca5a5;font-size:14px;min-height:20px;margin-top:12px}
+  .or{display:flex;align-items:center;gap:10px;color:var(--mut);font-size:13px;margin:20px 0 14px}
+  .or:before,.or:after{content:"";flex:1;height:1px;background:var(--line)}
+  #g{display:flex;justify-content:center;min-height:44px}
+  .hide{display:none}
+  .note{color:var(--mut);font-size:12px;text-align:center}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>BKSMM</h1>
+  <div class="sub">Naya password set karo</div>
+  <form id="f">
+    <label for="p">Naya password (kam se kam 8 characters)</label>
+    <input id="p" type="password" autocomplete="new-password" minlength="8" maxlength="72" required>
+    <label for="p2">Password dobara</label>
+    <input id="p2" type="password" autocomplete="new-password" minlength="8" maxlength="72" required>
+    <button class="go" type="submit">Password badlo</button>
+  </form>
+  <div class="err" id="err" role="alert"></div>
+  <p class="note"><a href="/login" style="color:var(--acc)">Login par jao</a></p>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const token = new URLSearchParams(location.search).get('token') || '';
+$('f').addEventListener('submit', async e => {
+  e.preventDefault(); $('err').textContent = '';
+  if ($('p').value !== $('p2').value) return $('err').textContent = 'Dono password same nahi hain.';
+  const btn = e.target.querySelector('.go'); btn.disabled = true;
+  const r = await fetch('/auth/reset', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({token, password: $('p').value})});
+  const j = await r.json().catch(() => ({}));
+  if (r.ok) location.href = '/'; else { $('err').textContent = j.error || 'Kuch galat hua.'; btn.disabled = false; }
+});
+</script>
+</body>
+</html>

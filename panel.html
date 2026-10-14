@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BKSMM</title>
+<style>
+  :root{--bg:#0b1220;--card:#111a2e;--line:#1f2b46;--txt:#e5e7eb;--mut:#94a3b8;--acc:#05a6f3;--ok:#86efac;--bad:#fca5a5}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+  nav{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;padding:12px 16px;background:#0a1020;border-bottom:1px solid var(--line)}
+  nav b{font-size:20px;margin-right:8px}
+  nav a{color:var(--txt);text-decoration:none;font-size:14px;padding:6px 10px;border-radius:8px}
+  nav a.on{background:var(--acc)}
+  nav .sp{flex:1}
+  main{max-width:900px;margin:0 auto;padding:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px}
+  h2{margin:0 0 14px;font-size:20px}
+  label{display:block;font-size:13px;color:var(--mut);margin:12px 0 5px}
+  input,select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);background:#0b1426;color:var(--txt);font-size:15px}
+  button.go{margin-top:16px;padding:12px 20px;border:0;border-radius:10px;background:var(--acc);color:#fff;font-size:15px;font-weight:600;cursor:pointer}
+  button.go:disabled{opacity:.6}
+  .msg{margin-top:12px;font-size:14px;min-height:20px}
+  .ok{color:var(--ok)}.bad{color:var(--bad)}.mut{color:var(--mut);font-size:13px}
+  .tw{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--mut);font-weight:500}
+  td.w{max-width:320px;word-break:break-word}
+  .row{display:grid;gap:12px;grid-template-columns:1fr 1fr}
+  @media(max-width:600px){.row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<nav id="nav"></nav>
+<main id="main"></main>
+<script>
+const $ = (t, a = {}, ...kids) => { const e = document.createElement(t); for (const k in a) k === 'class' ? e.className = a[k] : e[k] = a[k]; kids.flat().forEach(c => e.append(c)); return e; };
+const path = location.pathname.replace(/\/$/, '') || '/';
+let me = { guest: true };
+const money = n => '₹' + Number(n).toFixed(2);
+async function api(url, body) {
+  const r = await fetch(url, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(j.error || 'Kuch galat hua.'), { status: r.status });
+  return j;
+}
+function setMsg(el, text, ok) { el.textContent = text; el.className = 'msg ' + (ok ? 'ok' : 'bad'); }
+
+function nav() {
+  const n = document.getElementById('nav');
+  n.replaceChildren($('b', {}, 'BKSMM'));
+  [['/', 'Home'], ['/order', 'New order'], ['/orders', 'My orders'], ['/services', 'Services'], ['/addfunds', 'Add funds']]
+    .concat(me.admin ? [['/admin', 'Admin']] : [])
+    .forEach(([h, t]) => n.append($('a', { href: h, class: path === h ? 'on' : '' }, t)));
+  n.append($('span', { class: 'sp' }));
+  if (me.guest) { n.append($('a', { href: '/login' }, 'Login'), $('a', { href: '/signup' }, 'Sign up')); }
+  else {
+    n.append($('span', { class: 'mut' }, '👤 ' + me.username + ' · ' + money(me.balance)));
+    n.append($('a', { href: '#', onclick: async e => { e.preventDefault(); await fetch('/auth/logout', { method: 'POST' }); location.href = '/'; } }, 'Logout'));
+  }
+}
+function needLogin(main) {
+  main.append($('div', { class: 'card' }, $('h2', {}, 'Pehle login karo'), $('p', {}, 'Ye page dekhne ke liye login ya signup karo. '),
+    $('a', { href: '/login', style: 'color:var(--acc)' }, 'Login / Sign up')));
+}
+
+async function pageServices(main, forOrder) {
+  const card = $('div', { class: 'card' }, $('h2', {}, 'Services'), $('p', { class: 'mut' }, 'Load ho raha hai...'));
+  main.append(card);
+  let list;
+  try { list = await api('/api/services'); } catch (e) { card.lastChild.textContent = e.message; card.lastChild.className = 'bad'; return null; }
+  return { card, list };
+}
+
+async function viewServices(main) {
+  const r = await pageServices(main); if (!r) return;
+  const { card, list } = r;
+  const q = $('input', { placeholder: 'Search (naam ya ID)...' });
+  const tw = $('div', { class: 'tw' });
+  const draw = () => {
+    const t = q.value.toLowerCase();
+    const rows = list.filter(s => !t || s.name.toLowerCase().includes(t) || String(s.id) === t || s.category.toLowerCase().includes(t)).slice(0, 300);
+    tw.replaceChildren($('table', {}, $('tr', {}, ...['ID', 'Service', 'Rate/1000', 'Min', 'Max'].map(h => $('th', {}, h))),
+      ...rows.map(s => $('tr', {}, $('td', {}, s.id), $('td', { class: 'w' }, $('div', { class: 'mut' }, s.category), s.name), $('td', {}, money(s.price)), $('td', {}, s.min), $('td', {}, s.max)))));
+  };
+  q.oninput = draw; card.lastChild.replaceWith(q, tw); draw();
+}
+
+async function viewOrder(main) {
+  if (me.guest) return needLogin(main);
+  const r = await pageServices(main); if (!r) return;
+  const { card, list } = r;
+  card.firstChild.textContent = 'New order';
+  const cats = [...new Set(list.map(s => s.category))];
+  const cat = $('select', {}, ...cats.map(c => $('option', { value: c }, c)));
+  const svc = $('select');
+  const info = $('div', { class: 'mut' });
+  const link = $('input', { placeholder: 'https://t.me/channel/123 ya @username' });
+  const qty = $('input', { type: 'number', min: 1, placeholder: 'Quantity' });
+  const charge = $('div', { style: 'font-size:18px;margin-top:12px' });
+  const msg = $('div', { class: 'msg', role: 'alert' });
+  const btn = $('button', { class: 'go', type: 'submit' }, 'Order karo');
+  const cur = () => list.find(s => s.id === +svc.value);
+  const fillSvc = () => { svc.replaceChildren(...list.filter(s => s.category === cat.value).map(s => $('option', { value: s.id }, `${s.id} - ${s.name} - ${money(s.price)}/1000`))); upd(); };
+  const upd = () => {
+    const s = cur(); if (!s) return;
+    info.textContent = `Min ${s.min} · Max ${s.max} · ${money(s.price)} per 1000`;
+    const n = parseInt(qty.value, 10);
+    charge.textContent = n > 0 ? 'Charge: ' + money(Math.ceil(s.price * n / 1000 * 100 - 1e-9) / 100) : '';
+  };
+  cat.onchange = fillSvc; svc.onchange = upd; qty.oninput = upd;
+  const form = $('form', {}, $('label', {}, 'Category'), cat, $('label', {}, 'Service'), svc, info, $('label', {}, 'Link'), link, $('label', {}, 'Quantity'), qty, charge, btn, msg);
+  form.onsubmit = async e => {
+    e.preventDefault(); btn.disabled = true; msg.textContent = '';
+    try {
+      const o = await api('/api/order', { service: +svc.value, link: link.value, quantity: +qty.value });
+      setMsg(msg, `Order #${o.order} place ho gaya. Charge ${money(o.charge)}. Balance ${money(o.balance)}.`, true);
+      me.balance = o.balance; nav(); link.value = ''; qty.value = ''; upd();
+    } catch (x) { setMsg(msg, x.message, false); }
+    btn.disabled = false;
+  };
+  card.lastChild.replaceWith(form); fillSvc();
+}
+
+async function viewOrders(main) {
+  if (me.guest) return needLogin(main);
+  const card = $('div', { class: 'card' }, $('h2', {}, 'My orders'), $('p', { class: 'mut' }, 'Load ho raha hai...'));
+  main.append(card);
+  try {
+    const rows = await api('/api/orders');
+    if (!rows.length) { card.lastChild.textContent = 'Abhi koi order nahi hai.'; return; }
+    card.lastChild.replaceWith($('div', { class: 'tw' }, $('table', {}, $('tr', {}, ...['ID', 'Date', 'Service', 'Link', 'Qty', 'Charge', 'Status'].map(h => $('th', {}, h))),
+      ...rows.map(o => $('tr', {}, $('td', {}, o.id), $('td', {}, o.created_at.slice(0, 16)), $('td', { class: 'w' }, o.service_name), $('td', { class: 'w' }, o.link),
+        $('td', {}, o.quantity), $('td', {}, money(o.charge)), $('td', {}, o.status + (o.refunded ? ' (refund)' : '')))))));
+  } catch (e) { card.lastChild.textContent = e.message; card.lastChild.className = 'bad'; }
+}
+
+async function viewAdmin(main) {
+  if (!me.admin) return main.append($('div', { class: 'card' }, 'Sirf admin ke liye.'));
+  const card = $('div', { class: 'card' }, $('h2', {}, 'Admin'));
+  const sum = $('p', { class: 'mut' }, 'Load ho raha hai...');
+  const user = $('input', { placeholder: 'User ka username' });
+  const amt = $('input', { type: 'number', step: '0.01', placeholder: 'Amount (minus se balance kam hoga)' });
+  const msg = $('div', { class: 'msg', role: 'alert' });
+  const btn = $('button', { class: 'go', type: 'submit' }, 'Balance add karo');
+  const hist = $('div', { class: 'tw' });
+  const form = $('form', {}, $('label', {}, 'Username'), user, $('label', {}, 'Amount (₹)'), amt, btn, msg);
+  card.append(sum, form, $('h2', { style: 'margin-top:24px' }, 'Recent'), hist); main.append(card);
+  const load = async () => {
+    const s = await api('/api/admin/summary');
+    sum.textContent = `Provider balance: ${s.providerBalance} · Users: ${s.users} · Markup: ${s.markup}%`;
+    hist.replaceChildren($('table', {}, $('tr', {}, ...['Date', 'User', 'Amount', 'By'].map(h => $('th', {}, h))),
+      ...s.recent.map(c => $('tr', {}, $('td', {}, c.created_at.slice(0, 16)), $('td', {}, c.username), $('td', {}, money(c.amount)), $('td', {}, c.by_admin)))));
+  };
+  form.onsubmit = async e => {
+    e.preventDefault(); btn.disabled = true;
+    try { const o = await api('/api/admin/credit', { username: user.value, amount: +amt.value }); setMsg(msg, `${o.username} ka naya balance ${money(o.balance)}`, true); amt.value = ''; await load(); }
+    catch (x) { setMsg(msg, x.message, false); }
+    btn.disabled = false;
+  };
+  load().catch(x => sum.textContent = x.message);
+}
+
+(async () => {
+  try { me = await api('/api/me'); } catch (_) {}
+  nav();
+  const main = document.getElementById('main');
+  document.title = 'BKSMM';
+  ({ '/order': viewOrder, '/orders': viewOrders, '/services': viewServices, '/admin': viewAdmin }[path] || (() => {}))(main);
+})();
+</script>
+</body>
+</html>
